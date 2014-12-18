@@ -1,111 +1,169 @@
 #include "lcd.h"
 
+// external crystal used 20 Mhz.
+
+#define ONE_SECOND_X_100 500000/8  //prescalar used 1:8
+#define ONE_SECOND_X_1000 5000000/8
 
 #define TRUE 1
 #define FALSE 0
 
-//multitasking system – handle multiple tasks with one microprocessor
-
-//task counters used to tell when a task is ready to be executed
-//all these counters are incremented every time a 500us interrupt happens
-//every task has its own counter that is updated every time a 500us interrupt happens
-unsigned int task0_counter=0;
-unsigned int task1_counter=0;
-unsigned int task2_counter=0;
-
-//this tells when a task is going to happen again
-//for example, when task0_counter==TASK0_COUNTER_MAX, set task0_counter=0 and do task
-#define TASK0_COUNTER_MAX 1         //high frequency task – every 500us, maybe PWM
-#define TASK2_COUNTER_MAX 2000      //low frequency and low priority task, every 2500ms
-
-//Note: every variable referenced in both interrupt and main() must be declared volatile. You have been warned!
-//this enables/disables a task
-volatile unsigned char task0_enable=FALSE;
-volatile unsigned char task2_enable=TRUE;
-
-volatile unsigned int countmy=0;
+unsigned char readyToCalculate = FALSE;
+unsigned char captureEvent = FALSE;
+unsigned char timer2flag = FALSE;
+unsigned char zeroFrequency = TRUE;
+unsigned char mode = 1;
+unsigned int timerPast;
+volatile unsigned char Roll_over_cnt=0;
 
 
-//this allows tasks triggered by interrupt to run in the background in main()
-volatile unsigned char task2_go=FALSE;
-void setup_multitasking(void)
+union join
 {
-   //set up tmr1  to interrupt every 500us
-   TMR1CS=0;
-   T1CKPS0=0;
-   T1CKPS1=0;
+    unsigned char parts[2];
+    unsigned int whole;
+};
 
-/*We want to wait 2500 clock cycles, or 500us @ 20MHz (instructions are 1/4 speed of clock).  Timer 1 interrupts when it gets to 0xFFFF or 65535.  Therefore, we set timer 1 to 65535 minus 2000 = 63535, then wait 2000 ticks until rollover at 65535.  To test, use simulator to find that its exactly correct*/
+union join timerCurrent;
+unsigned long remaining_T=0;
+unsigned int calculation(unsigned int time, unsigned int * pastTime, int mode)
+{
+    unsigned int returnData;
+    unsigned int timeBetween = time - *pastTime;
+    *pastTime = time;
 
-   #define  TICKS_BETWEEN_INTERRUPTS      2500
-   #define  INTERRUPT_OVERHEAD            19
-   #define TMR1RESET (0x0000-(TICKS_BETWEEN_INTERRUPTS-INTERRUPT_OVERHEAD))
-   #define TMR1RESET_HIGH TMR1RESET >> 8
-   #define TMR1RESET_LOW TMR1RESET & 0xFF
-   TMR1ON=0;
-   TMR1H=TMR1RESET_HIGH;
-   TMR1L=TMR1RESET_LOW;
-   TMR1ON=1;      
-   TMR1IF=0;
-   TMR1IE=1;
-   PEIE=1;
-   GIE=1;   
+    if (mode == 1)  // FREQENCY_HIGH_RESOLUTION
+    {
+        returnData = ONE_SECOND_X_1000 / timeBetween;
+    }
+    else if (mode == 2)  // FREQENCY_LOW_RESOLUTION
+    {
+        returnData = ONE_SECOND_X_100 / timeBetween;
+    }
+
+	remaining_T = (ONE_SECOND_X_1000 - returnData * timeBetween)* 16 ;
+
+	remaining_T =remaining_T / 100000;
+
+    return returnData;
 }
+
+
+void timers(void)
+{
+
+//    // timer 0 1ms
+//    T0CS = 0; // FORC/4
+//    PS2=0;
+//    PS1=1;
+//    PS0=1; // pre scalar 16
+//    PSA = 0; // pre scalar enabled
+//    TMR0 = (255 - 63); //preload timer register
+//    TMR0IE = 1; //enable interrupts
+//    TMR0IF = 0; // clear interrupt flag
+
+
+    //timer 2 500mS timer
+    TMR2ON = 0; //timer off
+    T2CKPS1=T2CKPS0 = 1; // pre scalar 64
+    TOUTPS3 =TOUTPS2 =TOUTPS1=TOUTPS0 = 0b1111; //post scalar 16
+    PR2 = 255; //255 tmr preiod counter
+    TMR2IE = 1; // enable timer interrupts
+    TMR2IF = 0; // clear timer interrupt flag
+    TMR2ON = 1; //timer on
+
+
+
+    //timer 1 for input capture
+    TMR1ON = 0; //timer off
+    TMR1CS = 0; //forc / 4
+    T1CKPS0=1;// pre scalar 8
+    T1CKPS1=1;
+	TMR1IE = 1; // enable timer interrupts
+    TMR1IF = 0; // clear timer interrupt flag
+    TMR1ON = 1; //timer on
+
+}
+
+void input_capure(void)
+{
+    TRISC2=1; //CAPTURE INPUT //RC2 input
+    CCP1IF = 0; // cleanr flag
+    CCP1CON = 0x05; //ccp capures on every rising edge
+    //CCP1CON = 0x06; //capture edge every 4th rising edge
+    //CCP1CON = 0x07; //capture edge every 16th rising edge
+    CCP1IE = 1; //ccp module interrupt enable
+}
+
+
+void initialize(void)
+{
+    timers();
+    input_capure();
+    PEIE = 1; //enable perifiral interrupts
+    GIE = 1; //enable global interrupts
+}
+
+
 
 void interrupt isr(void)
 {
 
-	if (INTF && INTE){
-	countmy++;  
-    INTF = 0;          // clear the interrupt flag
+//    if (TMR0IF)
+//    {
+//        TMR0 -= (63 - 19);
+//        TMR0IF = 0; //clear flag
+//    }
+
+
+    // timer 2 interrupt
+    if (TMR2IF)
+    {
+        static int timeCount = 0;
+        if (timeCount >= 2)
+        {
+            timeCount = 0;
+            timer2flag = TRUE;
+        } else
+        {
+            timeCount++;
+        }
+        TMR2IF = 0; //clear interrupt flag
+    }
+
+
+    // timer 1 interrupt
+    if (TMR1IF)
+    {
+		Roll_over_cnt++;
+        TMR1IF = 0; //clear interrupt flag
+    }
+
+
+    if (CCP1IF)
+    {
+        timerCurrent.parts[0] = CCPR1L;
+        timerCurrent.parts[1] = CCPR1H;
+        if (zeroFrequency == TRUE)
+        {
+            zeroFrequency = FALSE;
+			captureEvent = TRUE;
+            timerPast = timerCurrent.whole;
+        }
+        else
+        {
+            readyToCalculate = TRUE;
+			captureEvent = TRUE;
+        }
+
+		Roll_over_cnt=0;
+        CCP1IF = 0; // cleanr flag
+    }
 
 }
 
-
-
-
-
-   //one tick every 500us at 16Mhz
-   if (TMR1IF && TMR1IE)
-   {
-      //set up timer 1 again to interrupt 500us in future
-      TMR1IF=0;
-      TMR1ON=0;
-      TMR1H=TMR1RESET_HIGH;
-      TMR1L=TMR1RESET_LOW;
-      TMR1ON=1;
-      task0_counter++;
-      if (task0_counter>=TASK0_COUNTER_MAX)     //high frequency task – every 1 tick
-      {
-            task0_counter=0;
-            if (task0_enable==TRUE)
-            {
-                  //do high frequency important task 0, for example PWM
-
-				
-            }
-      }
-
-
-/*this task takes a long time, 100ms for example, lots of maths.  Is extremely low priority, but has to be done at regular intervals, so all this does is trigger it.  In main(), it will, at leisure, poll ‘task2_go’ and then execute it in the background.*/
-
-      task2_counter++;
-      if (task2_counter>=TASK2_COUNTER_MAX)     //every 250ms
-      {
-          task2_counter=0;
-          if (task2_enable==TRUE)
-          {
-               //every 250ms take 100ms to do maths, do this in main() so the we can get back to doing the high frequency tasks.
-               task2_go=TRUE;
-				INTE = 1; 
-          }
-      }
-   }  //if (TMR1IF)
-} //interrupt routine
-
 main()
 {
-    TRISB=0X01;
+    TRISB=0X00;
     initLCD();
     ADCON1 = 0x06;  // Disable Analog functions
 
@@ -115,22 +173,41 @@ main()
     __delay_ms(1);
 
 
-    INTE = 1;                //Enable RB0/INT external Interrupt
-    INTEDG = 1;              //Interrupt on rising edge
+	unsigned int dataHolder=0;
+    initialize();
 
-   setup_multitasking();
-   while(1)
-   {
-      if (task2_go==TRUE)
-      {
-            task2_go=FALSE;
-            //take our time, doing heaps of complex maths at our leisure in the background
+    while(1)
+    {
+        if (readyToCalculate == TRUE)
+        {
+            dataHolder = calculation(timerCurrent.whole, &timerPast, mode);
+            readyToCalculate = FALSE;
+        }
 
-	        LCD_goto(2,0);
-        	LCD_num (countmy);
-			countmy=0;
 
-		
-      }
-   }
+        if (timer2flag == TRUE) 
+        {
+                if (captureEvent == FALSE)
+                {
+					LCD_goto(2,0);
+    				LCD_num(0);
+					LCD_goto(2,5);
+    				LCD_num2(0);
+                } else
+                {
+					LCD_goto(2,0);
+    				LCD_num(dataHolder);
+					LCD_goto(2,4);
+					LCD_Write('.',1);
+					LCD_goto(2,5);
+    				LCD_num2((unsigned int)remaining_T);
+                    captureEvent = FALSE;
+                }            
+           
+            timer2flag = FALSE;
+
+        }
+
+
+    }
 }

@@ -4,7 +4,6 @@ __CONFIG(HS & WDTDIS & PWRTEN & BORDIS);
 
 #define _XTAL_FREQ 20000000
 
-
 #define LCD_RS RB7
 #define LCD_EN RB6
 #define LCD_D4 RB5
@@ -71,26 +70,6 @@ void LCD_goto(unsigned char row,unsigned char column)
     }
 }
 
-void LCD_num(int n)
-{
-
-    
-
-
-
-    if(n<=9999)
-    {
-        LCD_Write((n/1000)+48,1);
-        LCD_Write(((n/100)%10)+48,1);
-        LCD_Write(((n%100)/10)+48,1);
-        LCD_Write((n%10)+48,1);
-
-    }
-    
-    
-
-}
-
 
 void lcd_puts(const char *s)
 {
@@ -102,6 +81,43 @@ void lcd_puts(const char *s)
 
     }
 }
+
+void LCD_num(int n)
+{ 
+    if(n<=9999)
+    {
+        LCD_Write((n/1000)+48,1);
+        LCD_Write(((n/100)%10)+48,1);
+        LCD_Write(((n%100)/10)+48,1);
+        LCD_Write((n%10)+48,1);
+
+    }
+
+
+    if(n>9999)
+    {
+		lcd_puts("XXXX");
+
+    }
+    
+    
+
+}
+
+
+void LCD_num2(int n)
+{ 
+    if(n<=99)
+    {
+        LCD_Write((n/10)+48,1);
+        LCD_Write((n%10)+48,1);
+
+    }
+ 
+
+}
+
+
 
 
 
