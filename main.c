@@ -1,113 +1,95 @@
 #include "lcd.h"
-
-#define PERIOD 5000000
-#define PER_COUNTS ((PERIOD / 100) - 1)  // don't edit this!
-#define PER_REMAINDER (PERIOD - (PER_COUNTS * 100))  // don't edit this!
-unsigned long pcount=0;    // used in interrupt to count PER_COUNTS
-unsigned char calc_bit=0;
-unsigned long RPM_Value=0;
-
+unsigned char count=0,count2=0,calc_bit=0,mycalc;
 
 void interrupt isr()
 {
 
-    if(!pcount)
-    {
-
-        TMR1ON = 0;    // Stop the timer	
-        calc_bit=1;
-        pcount = (PER_COUNTS+1);    // how many delays to make total
-        TMR0 -=(PER_REMAINDER-3);  // first delay will be ==remainder
-    }
-    // else make a normal delay
-
-    else
-    {
-
-
-		
-        TMR0 -= (100-2);       // make another 100 tick delay
-    }
-    pcount--;
-    //-----------------------------------------------------
-    // clear the TMR0 overflow flag and exit
-    T0IF = 0;
+	if (INTF==1){   
+	TMR1ON=0;      
+	calc_bit=1;
+    INTF = 0;   
 }
 
-unsigned char delay;
-void delay_10us(unsigned char t)
-// Provides t * 10 usecs of delay.
-// Max of t is 255 which corresponds to 2550 usecs 
+
+		if(TMR1IF==1)  {	
+		count++; 		
+		TMR1IF=0; 
+
+
+}
+
+
+}
+
+
+void init_EXT0()
 {
-delay = t;
-/*  Below is an assembly language fragment to 
- *  create a 10 microsecond delay.  Note that in 
- *  this fragment the C global variable "delay" 
- *  is written as "_delay".
- */
-#asm
-DELAY_10US_1: 
-   CLRWDT 
-   NOP
-   NOP
-   NOP
-   NOP
-   NOP
-   NOP 
-   DECFSZ  _delay,f 
-   GOTO    DELAY_10US_1
-#endasm 
-} 
+    GIE = 1;                  //Enable Global Interrupt
+    INTE = 1;                //Enable RB0/INT external Interrupt
+    PEIE = 1;                //Disable all unmasked peripheral interrupt
+    INTEDG = 1;              //Interrupt on rising edge
 
+}
 
+void init_TMR1()
+{
+		TMR1H=0x00;
+		TMR1L=0x00;
+	
+		T1CKPS1=0;
+		T1CKPS0=0;
+	
+		TMR1CS=0;
+		TMR1IF=0;
+		TMR1IE=1;
+		TMR1ON=1;
 
+}
 
 void main(void)
 {
-    TRISB = 0b00000000;
-
-
+    TRISB=0X01;
     initLCD();
     ADCON1 = 0x06;  // Disable Analog functions
-    T1CON = 0b00001110; // TMR1 as 16-bit counter
 
-
-
-
-   	LCD_goto(1,0);
+    LCD_goto(1,0);
     __delay_ms(1);
     lcd_puts ("  Tachometer  ");
     __delay_ms(1);
-    LCD_goto(2,10);
-    __delay_ms(1);
-    lcd_puts ("RPM");
-    __delay_ms(1);
 
-	TMR0 =0;
-    OPTION = 0b00001000;    // TMR0 on, 1:1 prescale
-    INTCON = 0b10100000;  // GIE on, T0IE on (turn interrupt on)
+//    LCD_goto(2,10);
+ //   __delay_ms(1);
+ //   lcd_puts ("RPS");
+ //   __delay_ms(1);
+
+
+	init_TMR1();
+
+init_EXT0();
+
 
     while(1)
     {
-        
-        if (calc_bit==1)
-        {
+        PORTC=0;
 
-            RPM_Value = (256*TMR1H + TMR1L) ;
-            LCD_goto(2,5);
-            LCD_num (RPM_Value);
-            TMR1L = 0;
-            TMR1H = 0;
-            calc_bit=0;
-            TMR1ON = 1;            
+if (calc_bit){
+		calc_bit=0;
+        LCD_goto(2,0);
+        LCD_num (count);
+        LCD_goto(2,5);
+        LCD_num (TMR1H);
+        LCD_goto(2,10);
+        LCD_num (TMR1L);
+		count=0;
+		TMR1H=0x00;
+		TMR1L=0x00;
+		TMR1ON=1; 
 
-        }
 
-    }
 
 }
-
-
+    }
+}
 
 
 
