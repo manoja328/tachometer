@@ -2,9 +2,8 @@
 
 // external crystal used 20 Mhz.
 
-#define ONE_SECOND_X_100 500000/8  //prescalar used 1:8
-#define ONE_SECOND_X_1000 5000000/8
-
+#define ONE_SECOND_X_100 500100/8  //prescalar used 1:8
+#define ONE_SECOND_X_1000 5001000/8
 #define TRUE 1
 #define FALSE 0
 
@@ -40,9 +39,9 @@ unsigned int calculation(unsigned int time, unsigned int * pastTime, int mode)
         returnData = ONE_SECOND_X_100 / timeBetween;
     }
 
-	remaining_T = (ONE_SECOND_X_1000 - returnData * timeBetween)* 16 ;
+	//remaining_T = (ONE_SECOND_X_1000 - returnData * timeBetween)* 16 ;
 
-	remaining_T =remaining_T / 100000;
+	//remaining_T =remaining_T / 100000;
 
     return returnData;
 }
@@ -119,7 +118,7 @@ void interrupt isr(void)
     if (TMR2IF)
     {
         static int timeCount = 0;
-        if (timeCount >= 2)
+        if (timeCount >= 8)
         {
             timeCount = 0;
             timer2flag = TRUE;
@@ -155,7 +154,7 @@ void interrupt isr(void)
 			captureEvent = TRUE;
         }
 
-		Roll_over_cnt=0;
+
         CCP1IF = 0; // cleanr flag
     }
 
@@ -182,6 +181,10 @@ main()
         {
             dataHolder = calculation(timerCurrent.whole, &timerPast, mode);
             readyToCalculate = FALSE;
+					LCD_goto(2,5);
+    				//LCD_num2((unsigned int)remaining_T);
+					LCD_num2(Roll_over_cnt);
+					Roll_over_cnt=0;
         }
 
 
@@ -191,16 +194,17 @@ main()
                 {
 					LCD_goto(2,0);
     				LCD_num(0);
-					LCD_goto(2,5);
-    				LCD_num2(0);
+					//LCD_goto(2,5);
+    				//LCD_num2(0);
                 } else
                 {
 					LCD_goto(2,0);
     				LCD_num(dataHolder);
 					LCD_goto(2,4);
 					LCD_Write('.',1);
-					LCD_goto(2,5);
-    				LCD_num2((unsigned int)remaining_T);
+					//LCD_goto(2,5);
+    				//LCD_num2((unsigned int)remaining_T);
+					//LCD_num2(Roll_over_cnt);
                     captureEvent = FALSE;
                 }            
            
