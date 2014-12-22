@@ -11,10 +11,9 @@ unsigned char readyToCalculate = FALSE;
 unsigned char captureEvent = FALSE;
 unsigned char timer2flag = FALSE;
 unsigned char zeroFrequency = TRUE;
-unsigned char mode = 1;
 unsigned int timerPast;
 volatile unsigned char Roll_over_cnt=0;
-
+volatile unsigned char rollovers_for_calc=0;
 
 union join
 {
@@ -23,21 +22,14 @@ union join
 };
 
 union join timerCurrent;
-unsigned long remaining_T=0;
-unsigned int calculation(unsigned int time, unsigned int * pastTime, int mode)
+//unsigned long remaining_T=0;
+
+unsigned int calculation(unsigned int time, unsigned int * pastTime)
 {
     unsigned int returnData;
-    unsigned int timeBetween = time - *pastTime;
+    unsigned long timeBetween = (time - *pastTime)+(65535*(rollovers_for_calc-1));
     *pastTime = time;
-
-    if (mode == 1)  // FREQENCY_HIGH_RESOLUTION
-    {
-        returnData = ONE_SECOND_X_1000 / timeBetween;
-    }
-    else if (mode == 2)  // FREQENCY_LOW_RESOLUTION
-    {
-        returnData = ONE_SECOND_X_100 / timeBetween;
-    }
+    returnData = ONE_SECOND_X_1000 / timeBetween;
 
 	//remaining_T = (ONE_SECOND_X_1000 - returnData * timeBetween)* 16 ;
 
@@ -118,7 +110,7 @@ void interrupt isr(void)
     if (TMR2IF)
     {
         static int timeCount = 0;
-        if (timeCount >= 8)
+        if (timeCount >= 32)
         {
             timeCount = 0;
             timer2flag = TRUE;
@@ -154,6 +146,18 @@ void interrupt isr(void)
 			captureEvent = TRUE;
         }
 
+	
+		if (Roll_over_cnt ==0)
+{
+
+rollovers_for_calc =1;
+}
+	
+else {
+rollovers_for_calc =Roll_over_cnt;
+Roll_over_cnt=0;
+}
+
 
         CCP1IF = 0; // cleanr flag
     }
@@ -179,12 +183,8 @@ main()
     {
         if (readyToCalculate == TRUE)
         {
-            dataHolder = calculation(timerCurrent.whole, &timerPast, mode);
-            readyToCalculate = FALSE;
-					LCD_goto(2,5);
-    				//LCD_num2((unsigned int)remaining_T);
-					LCD_num2(Roll_over_cnt);
-					Roll_over_cnt=0;
+            dataHolder = calculation(timerCurrent.whole, &timerPast);
+			readyToCalculate = FALSE;
         }
 
 
@@ -194,14 +194,14 @@ main()
                 {
 					LCD_goto(2,0);
     				LCD_num(0);
-					//LCD_goto(2,5);
-    				//LCD_num2(0);
+					LCD_goto(2,5);
+    				LCD_num2(0);
                 } else
                 {
 					LCD_goto(2,0);
     				LCD_num(dataHolder);
-					LCD_goto(2,4);
-					LCD_Write('.',1);
+					//LCD_goto(2,4);
+					//LCD_Write('.',1);
 					//LCD_goto(2,5);
     				//LCD_num2((unsigned int)remaining_T);
 					//LCD_num2(Roll_over_cnt);
