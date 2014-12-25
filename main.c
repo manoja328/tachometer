@@ -110,7 +110,7 @@ void interrupt isr(void)
     if (TMR2IF)
     {
         static int timeCount = 0;
-        if (timeCount >= 32)
+        if (timeCount >= 80)
         {
             timeCount = 0;
             timer2flag = TRUE;
