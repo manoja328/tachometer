@@ -116,7 +116,16 @@ void LCD_num2(int n)
  
 
 }
+void LCD_num1(int n)
+{ 
+    if(n<=9)
+    {
+        LCD_Write(n+48,1);
 
+    }
+ 
+
+}
 
 
 

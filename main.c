@@ -3,7 +3,7 @@
 // external crystal used 20 Mhz.
 
 #define ONE_SECOND_X_100 500100/8  //prescalar used 1:8
-#define ONE_SECOND_X_1000 5001000/8
+#define ONE_SECOND_X_1000 625100
 #define TRUE 1
 #define FALSE 0
 
@@ -22,18 +22,33 @@ union join
 };
 
 union join timerCurrent;
-//unsigned long remaining_T=0;
+unsigned long remaining_T=0;
 
 unsigned int calculation(unsigned int time, unsigned int * pastTime)
 {
     unsigned int returnData;
-    unsigned long timeBetween = (time - *pastTime)+(65535*(rollovers_for_calc-1));
-    *pastTime = time;
+    unsigned long timeBetween;
+
+	if (rollovers_for_calc == 0 )
+	timeBetween  = time - *pastTime;
+
+	else if (rollovers_for_calc == 1 && time < *pastTime)
+	timeBetween  = time - *pastTime;
+	
+	else {
+	timeBetween  = 0x0000FFFF - *pastTime;	
+	timeBetween += 0x0000FFFF*(rollovers_for_calc-1);
+	timeBetween += time ;
+	}
+	
+	*pastTime = time;
+
     returnData = ONE_SECOND_X_1000 / timeBetween;
 
-	//remaining_T = (ONE_SECOND_X_1000 - returnData * timeBetween)* 16 ;
 
-	//remaining_T =remaining_T / 100000;
+	remaining_T = (ONE_SECOND_X_1000 - returnData * timeBetween);
+
+	remaining_T =remaining_T / 6250;
 
     return returnData;
 }
@@ -147,16 +162,12 @@ void interrupt isr(void)
         }
 
 	
-		if (Roll_over_cnt ==0)
-{
 
-rollovers_for_calc =1;
-}
 	
-else {
+
 rollovers_for_calc =Roll_over_cnt;
 Roll_over_cnt=0;
-}
+
 
 
         CCP1IF = 0; // cleanr flag
@@ -194,16 +205,16 @@ main()
                 {
 					LCD_goto(2,0);
     				LCD_num(0);
-					LCD_goto(2,5);
-    				LCD_num2(0);
+					//LCD_goto(2,5);
+    				//LCD_num2(0);
                 } else
                 {
 					LCD_goto(2,0);
     				LCD_num(dataHolder);
-					//LCD_goto(2,4);
-					//LCD_Write('.',1);
-					//LCD_goto(2,5);
-    				//LCD_num2((unsigned int)remaining_T);
+					LCD_goto(2,4);
+					LCD_Write('.',1);
+					LCD_goto(2,5);
+    				LCD_num1((unsigned int)remaining_T);
 					//LCD_num2(Roll_over_cnt);
                     captureEvent = FALSE;
                 }            
