@@ -29,17 +29,21 @@ unsigned int calculation(unsigned int time, unsigned int * pastTime)
     unsigned int returnData;
     unsigned long timeBetween;
 
-	if (rollovers_for_calc == 0 )
+
+	if (rollovers_for_calc == 0)
 	timeBetween  = time - *pastTime;
 
-	else if (rollovers_for_calc == 1 && time < *pastTime)
-	timeBetween  = time - *pastTime;
+	else{
+
+	timeBetween  = (unsigned long)time;
+	timeBetween += 0x0000FFFF*(unsigned long)(rollovers_for_calc-1);
+	timeBetween += 0x0000FFFF- (unsigned long)*pastTime;
+
+}
 	
-	else {
-	timeBetween  = 0x0000FFFF - *pastTime;	
-	timeBetween += 0x0000FFFF*(rollovers_for_calc-1);
-	timeBetween += time ;
-	}
+
+
+
 	
 	*pastTime = time;
 
@@ -124,8 +128,8 @@ void interrupt isr(void)
     // timer 2 interrupt
     if (TMR2IF)
     {
-        static int timeCount = 0;
-        if (timeCount >= 80)
+        static unsigned char timeCount = 0;
+        if (timeCount > 80)
         {
             timeCount = 0;
             timer2flag = TRUE;
@@ -214,8 +218,9 @@ main()
 					LCD_goto(2,4);
 					LCD_Write('.',1);
 					LCD_goto(2,5);
-    				LCD_num1((unsigned int)remaining_T);
-					//LCD_num2(Roll_over_cnt);
+    				LCD_num1(remaining_T);
+					LCD_goto(2,8);
+					LCD_num2(rollovers_for_calc);
                     captureEvent = FALSE;
                 }            
            
